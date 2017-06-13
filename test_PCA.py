@@ -6,7 +6,7 @@ Testing landmark positioning
 import cv2
 import cv2.cv as cv
 import numpy as np
-import scipy.cluster.vq as spclstr
+import scipy as sp
 import matplotlib.pyplot as plt
 import math
 import time
@@ -23,8 +23,7 @@ def rszDisp(img, wndwName, resizeFactor):
 def readToothLndmrks(mouth, tooth, isMirrored):
     if isMirrored == 'mirrored':
         mouth = mouth + 14
-        
-    print mouth
+    
     
     fileName = "Landmarks/" + isMirrored + "/landmarks" + str(mouth) + "-" + str(tooth) + ".txt"
     with open(fileName) as lndmrksFile:
@@ -45,7 +44,7 @@ def dispMouthLandmarks(mouth, landmarks):
         fileName = str(mouth+1)+".tif"
         
     filePath = "Radiographs/" + fileName
-    print filePath
+    #print filePath
     
     img = cv2.imread(filePath)
     resizeFactor = 2
