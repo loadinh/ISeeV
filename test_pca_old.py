@@ -14,10 +14,6 @@ import numpy.linalg as npLA
 import math
 import time
 
-#GLOBAL CONSTANTS
-landmarksPerTooth = 40
-teethPerMouth = 8
-totalMouths = 14
 
 def rszDisp(img, wndwName, resizeFactor):
     cv2.namedWindow(wndwName, cv2.WINDOW_NORMAL)
@@ -65,15 +61,13 @@ def dispMouthLandmarks(mouth, landmarks):
     
     rszDisp(img, wndwName, resizeFactor)
 
-
 def GPA(specTooth, disp):
     
     #specTooth is a matrix containing the shapes of the 14 teeth in a specific position, 40x2x1x14 matrix
     #keeping the third dimension, more practical to handle
     
     #choose initial reference shape randomly
-    #initShapePos = random.randint(0, 13)
-    initShapePos = 0
+    initShapePos = random.randint(0, 13)
     
     #initialize point matrices
     ComparedShape = specTooth[:,:,initShapePos]
@@ -130,14 +124,15 @@ def GPA(specTooth, disp):
 
 def NormalizeDataset(Landmarks, meanShapes):
     
-    global teethPerMouth
-    global totalMouths
+    teethPerMouth = 8
+    totalMouths = 14
     
     normalizedLandmarks = np.zeros( (landmarksPerTooth, 2, teethPerMouth, totalMouths), dtype=np.double )
     
     for tooth in range(teethPerMouth):
         for inst in range(totalMouths):
             [mat1,normalizedLandmarks[:,:,tooth,inst], disparity] = spsptl.procrustes(meanShapes[:,:,tooth],Landmarks[:,:,tooth,inst])
+    #print "orientation",orientation
         
     return normalizedLandmarks
   
@@ -149,8 +144,6 @@ def pca(X, nb_components=0):
     @param nb_components:    the nb components we're interested in
     @return: return the nb_components largest eigenvalues and eigenvectors of the covariance matrix and return the average sample 
     '''
-    X = np.transpose(X)
-    
     [n,d] = X.shape
     if (nb_components <= 0) or (nb_components>n):
         nb_components = n
@@ -198,7 +191,7 @@ def project(W, X, mu):
     Project X on the space spanned by the vectors in W.
     mu is the average image.
     '''
-    result = np.dot(X-mu,W)
+    result = np.dot(np.transpose(X)-mu,W)
     
     return result
 
@@ -207,34 +200,9 @@ def reconstruct(W, Y, mu):
     Reconstruct an image based on its PCA-coefficients Y, the eigenvectors W and the average mu.
     '''
     result = np.dot(W,Y)+mu
-
+    
     return result
 
-def dispProjection(eigVects, sample, mu):
-    x = project(eigVects, sample, mu)
-    y = reconstruct(eigVects, x, mu)
-
-    plt.plot(sample[0::2], sample[1::2], 'ro', hold = True)
-    plt.plot(y[0::2], y[1::2], 'yo', hold = True)
-    plt.pause(0.02)
-    plt.show()
-
-    return y
-    
-def reshapeDataset(dataset):
-
-    global teethPerMouth
-    global totalMouths
-    
-    temp_Vect = np.zeros((80,teethPerMouth,totalMouths), dtype = np.double)
-    res= np.zeros((80,teethPerMouth,totalMouths), dtype = np.double)
-    
-    for inst in range(totalMouths):
-        for th in range(teethPerMouth):
-            temp_Vect[:,th,inst] = np.transpose(np.hstack((dataset[:,0,tooth,inst],dataset[:,1,tooth,inst])))
-            res[0::2,th,inst] = temp_Vect[0:40,th,inst]
-            res[1::2,th,inst] = temp_Vect[40:80,th,inst]
-    return res
 
 
 #
@@ -242,6 +210,11 @@ def reshapeDataset(dataset):
 #
 
 dispImgs = 0
+
+
+landmarksPerTooth = 40
+teethPerMouth = 8
+totalMouths = 14
 
 originalLandmarks = np.zeros( (landmarksPerTooth, 2, teethPerMouth, totalMouths), dtype=np.double )
 mirroredLandmarks = np.zeros( (landmarksPerTooth, 2, teethPerMouth, totalMouths), dtype=np.double )
@@ -259,6 +232,8 @@ for mth in range(totalMouths):
 #obtain normalized shapes for every tooth
 specTooth = np.zeros( (landmarksPerTooth, 2, 1, totalMouths), dtype=np.double )
 outShape = np.zeros( (landmarksPerTooth, 2, 1, 1), dtype=np.double )
+#specTooth[:,:,0,:] = originalLandmarks[:,:,2,:]
+#[normalizedShapes, meanDisp] = GPA(originalLandmarks[:,:,2,:], False)
 
 meanShapes = np.zeros((landmarksPerTooth,2,teethPerMouth), dtype=np.double)
 
@@ -290,44 +265,65 @@ if dispPlots == 1:
             plt.plot(normalizedLandmarks[:,0,tooth,inst]+dispx, normalizedLandmarks[:,1,tooth,inst]+dispy, 'ro', hold = True)
             plt.pause(0.05)
             plt.show()
-#           
-#do PCA  
-# 
-plt.figure()
-sh_dist = np.zeros(14, dtype = np.double)
-for consComps in range(1,15):
-     
-    reshapedLandmarks = np.zeros((80,teethPerMouth,totalMouths), dtype = np.double)
-    
-    eigVects = np.zeros((80,consComps,teethPerMouth), dtype = np.double)
-    eigVals = np.zeros((consComps,teethPerMouth), dtype = np.double)
-    mus = np.zeros((80,teethPerMouth), dtype = np.double)
-    reshapedLandmarks = reshapeDataset(normalizedLandmarks)
-    
-    #pca on every tooth separately
-    for th in range(teethPerMouth):
-        eigVals,eigVects[:,:,th], mus[:,th] = pca(reshapedLandmarks[:,th,:], nb_components = consComps)    
-    
-    #choose the testTh tooth of the testInst picture to test if the PCA worked
-    #it confronts the original shape with the projected one and saves the euclidean distance beetween them
-    #using the cycle we can confront 
-    # !!! remember to activate the f_dispProj flag to show the plots
-    
-    testTh = 7
-    testInst = 6
-    
-    sh_proj = project(eigVects[:,:,testTh], reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
-    sh_reco = reconstruct(eigVects[:,:,testTh], sh_proj, mus[:,testTh])
-    
-    sh_dist[consComps-1] = npLA.norm(sh_reco-reshapedLandmarks[:,testTh,testInst])
- 
-    #print "distance, not interleaved, n of comps: ", consComps, ", ", sh_dist[consComps-1]
-   
-    f_dispProj = 1
-    if f_dispProj == 1:
-        dispProjection(eigVects[:,:,testTh],reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
+            
+#do PCA            
+X = np.zeros((14,80,8), dtype = np.double)
+Y = np.zeros((14,80,8), dtype = np.double)
+pr_Xa = np.zeros((40,2), dtype = np.double)
 
-plt.figure()
-plt.plot(np.linspace(1,14,14),sh_dist,'r')
+
+for tooth in range (teethPerMouth):
+    for inst in range (totalMouths):
+        X[inst,:,tooth] = np.transpose(np.hstack((np.transpose(normalizedLandmarks[:,0,tooth,inst]),np.transpose(normalizedLandmarks[:,1,tooth,inst]))))
+        Y[inst,0::2,tooth] = X[inst,0:40,tooth]
+        Y[inst,1::2,tooth] = X[inst,40:80,tooth]
+        
+print Y.shape
+
+compToConsider = 6
+eigVals, eigVects, mu = pca(X[:,:,0],nb_components = compToConsider)
+
+testShape = Y[0,:,0]
+
+Ya = project(eigVects, testShape, mu )
+Xa= reconstruct(eigVects, Ya, mu)
+
+pr_Xa[:,0] = Xa[0:40]
+pr_Xa[:,1] = Xa[40:80]
+
+plt.plot(pr_Xa[:,0], pr_Xa[:,1], 'ro', hold = True)
+plt.pause(0.05)
 plt.show()
 
+print 'shape of Xa', Xa.shape
+
+eigShapes = np.zeros((40,2,compToConsider), dtype = np.double) 
+
+#re-assemble eigenshape in case of block vector
+'''
+for vect in range(compToConsider):
+    eigShapes[:,0,vect] = eigVects[0:40,vect]
+    eigShapes[:,1,vect] = eigVects[40:80,vect]
+'''
+
+#re-assemble eigenshape in case of interleaved vector
+
+for vect in range(compToConsider):
+    for pt in range(40):
+        eigShapes[pt,:,vect] = (eigVects[2*pt,vect],eigVects[2*pt+1,vect]);
+        
+
+
+                  
+'''
+for vect in range(compToConsider):
+    plt.plot(eigShapes[:,0,vect], eigShapes[:,1,vect], 'ro', hold = True)
+    plt.pause(0.05)
+    plt.show()
+    '''
+
+
+
+
+print "eigvals shape",eigVals.shape
+print "eigvects shape",eigVects.shape
