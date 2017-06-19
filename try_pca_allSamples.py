@@ -171,7 +171,8 @@ def pca(X, nb_components=0):
     #approximate it by multiplying X by X transposed, then normalizing it
     #Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
     Xcov = np.cov(X)
-
+    print Xcov
+    
     #compute eigenvalues and eigenvectors
     eigenVals, eigenVects = npLA.eig(Xcov)
 

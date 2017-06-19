@@ -169,7 +169,9 @@ def pca(X, nb_components=0):
     
     #since computing the covariance matrix takes too much time, we can 
     #approximate it by multiplying X by X transposed, then normalizing it
-    Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
+    #Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
+    Xcov = np.cov(X)
+    print Xcov
 
     #compute eigenvalues and eigenvectors
     eigenVals, eigenVects = npLA.eig(Xcov)
@@ -282,7 +284,7 @@ if dispMean == 1:
 normalizedLandmarks = NormalizeDataset(originalLandmarks, meanShapes)
 
 #print normalizedShapes
-dispPlots = 0
+dispPlots = 1
 if dispPlots == 1:
     for tooth in range (teethPerMouth):
         dispx = ((math.floor(tooth)/4-(tooth//4))*1.8)-0.9
@@ -342,7 +344,7 @@ if f_dispProj == 1:
     dispProjection(eigVects[:,:,testTh],reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
 
 print "pca coeffs shape", pcaCoeffs.shape
-print pcaCoeffs
+#print pcaCoeffs
 
 dispCoeffSpace = 0
 if (consComps == 3) & (dispCoeffSpace == 1):
