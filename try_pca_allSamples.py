@@ -1,6 +1,6 @@
 # -*- coding: utf-8 -*-
 '''
-Testing landmark positioning
+all samples together, single model for all teeth
 '''
 
 import random
@@ -169,7 +169,8 @@ def pca(X, nb_components=0):
     
     #since computing the covariance matrix takes too much time, we can 
     #approximate it by multiplying X by X transposed, then normalizing it
-    Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
+    #Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
+    Xcov = np.cov(X)
 
     #compute eigenvalues and eigenvectors
     eigenVals, eigenVects = npLA.eig(Xcov)
@@ -297,127 +298,40 @@ if dispPlots == 1:
 #           
 #do PCA  
 # 
+consComps = 108
+##CLASSIC PCA ON BOTH COMPS SIMULTANEOUSLY
 sh_dist = np.zeros(14, dtype = np.double)
-consComps = 3
     
-reshapedLandmarks = np.zeros((80,teethPerMouth,totalMouths), dtype = np.double)
+reshapedLandmarks = np.zeros((80,teethPerMouth*totalMouths), dtype = np.double)
 pcaCoeffs = np.zeros((consComps,teethPerMouth,totalMouths), dtype = np.double)
 
-eigVects = np.zeros((80,consComps,teethPerMouth), dtype = np.double)
-eigVals = np.zeros((consComps,teethPerMouth), dtype = np.double)
-mus = np.zeros((80,teethPerMouth), dtype = np.double)
+eigVects = np.zeros((80,consComps), dtype = np.double)
+eigVals = np.zeros(consComps, dtype = np.double)
+mus = np.zeros(80, dtype = np.double)
 
-reshapedLandmarks = reshapeDataset(normalizedLandmarks)
+for inst in range(totalMouths):
+    for th in range(teethPerMouth):
+        reshapedLandmarks[0:40,inst*teethPerMouth+th] = normalizedLandmarks[:,0,th,inst]
+        reshapedLandmarks[40:80,inst*teethPerMouth+th] = normalizedLandmarks[:,1,th,inst]
 
-#pca on every tooth separately
-for th in range(teethPerMouth):
-    eigVals[:,th],eigVects[:,:,th], mus[:,th] = pca(reshapedLandmarks[:,th,:], nb_components = consComps)    
+#pca on every tooth together
+eigVals,eigVects, mus = pca(reshapedLandmarks, nb_components = consComps)    
 
 print eigVects.shape
 
 for inst in range(totalMouths):
     for th in range(teethPerMouth):
-        pcaCoeffs[:,th,inst] = project(eigVects[:,:,th], reshapedLandmarks[:,th,inst], mus[:,th])
+        pcaCoeffs[:,th,inst] = project(eigVects, reshapedLandmarks[:,inst*teethPerMouth+th], mus)
 
+testTh = 1
+testInst = 2
 
-#choose the testTh tooth of the testInst picture to test if the PCA worked
-#it confronts the original shape with the projected one and saves the euclidean distance beetween them
-#using the cycle we can confront 
-# !!! remember to activate the f_dispProj flag to show the plots
+sh_reco = reconstruct(eigVects, pcaCoeffs[:,testTh,testInst], mus)
+print "sh_reco shape: ", sh_reco.shape
 
-testTh = 6
-testInst = 6
-
-sh_proj = project(eigVects[:,:,testTh], reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
-sh_reco = reconstruct(eigVects[:,:,testTh], sh_proj, mus[:,testTh])
-
-sh_dist[consComps-1] = npLA.norm(sh_reco-reshapedLandmarks[:,testTh,testInst])
-
-#print "distance, not interleaved, n of comps: ", consComps, ", ", sh_dist[consComps-1]
-
-
-
-f_dispProj = 0
-if f_dispProj == 1:
-    dispProjection(eigVects[:,:,testTh],reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
-
-print "pca coeffs shape", pcaCoeffs.shape
-print pcaCoeffs
-
-dispCoeffSpace = 0
-if (consComps == 3) & (dispCoeffSpace == 1):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    cmhot = plt.get_cmap("hot")
-    
-    for th in range(teethPerMouth):
-        v = np.full((1, 14), th*2000, dtype = np.double)
-        surf = ax.scatter(pcaCoeffs[0,th,:], pcaCoeffs[1,th,:], pcaCoeffs[2,th,:], zdir='z', s=20, c = v, cmap = cmhot )
-        plt.pause(1)
-    plt.show()
-
-#
-#
-#
-#
-#
-#
-
-shToPlot = np.zeros((40,2), dtype = np.double)
-
-fig, ax = plt.subplots()
-plt.subplots_adjust(left=0.25, bottom=0.25)
-t = np.arange(0.0, 1.0, 0.001)
-Param0 = [0,0,0]
-shInter = reconstruct(eigVects[:,:,testTh],Param0,mus[:,testTh])
-shToPlot[:,0] = shInter[0::2]
-shToPlot[:,1] = shInter[1::2] 
-#s = a0*np.sin(2*np.pi*f0*t)
-l, = plt.plot(shToPlot[:,0], shToPlot[:,1], 'ro')
-plt.axis([-0.3, 0.3, -0.3, 0.3])
-plt.show()
-
-
-axsP1 = plt.axes([0.25, 0.15, 0.65, 0.03])
-axsP2 = plt.axes([0.25, 0.10, 0.65, 0.03])
-axsP3 = plt.axes([0.25, 0.05, 0.65, 0.03])
-
-lLim = -0.04
-uLim = 0.04
-
-sP1 = Slider(axsP1, 'P1', lLim, uLim, valinit=Param0[0])
-sP2 = Slider(axsP2, 'P2', lLim, uLim, valinit=Param0[1])
-sP3 = Slider(axsP3, 'P3', lLim, uLim, valinit=Param0[2])
-
-def update(val):
-    Param = [sP1.val,sP2.val,sP3.val]
-    shInter = reconstruct(eigVects[:,:,testTh],Param,mus[:,testTh])
-    shToPlot[:,0] = shInter[0::2]
-    shToPlot[:,1] = shInter[1::2] 
-    l.set_data(shToPlot[:,0],shToPlot[:,1])
-    fig.canvas.draw_idle()
-sP1.on_changed(update)
-sP2.on_changed(update)
-sP3.on_changed(update)
-
-
-resetax = plt.axes([0.8, 0, 0.1, 0.04])
-button = Button(resetax, 'Reset', hovercolor='0.975')
-
-
-def reset(event):
-    sP1.reset()
-    sP2.reset()
-    sP3.reset()
-button.on_clicked(reset)
-'''
-rax = plt.axes([0.025, 0.5, 0.15, 0.15])
-radio = RadioButtons(rax, ('red', 'blue', 'green'), active=0)
-
-
-def colorfunc(label):
-    l.set_color(label)
-    fig.canvas.draw_idle()
-radio.on_clicked(colorfunc)
-'''
+plt.figure()
+plt.plot(sh_reco[0:40],sh_reco[40:80], 'yo', hold = True)
+plt.plot(reshapedLandmarks[0:40,testInst*teethPerMouth+testTh],reshapedLandmarks[40:80,testInst*teethPerMouth+testTh], 'bo', hold = True)
+plt.plot(mus[0:40],mus[40:80], 'ro', hold = True)
+plt.pause(0.05)
 plt.show()

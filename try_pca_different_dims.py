@@ -1,6 +1,12 @@
 # -*- coding: utf-8 -*-
 '''
-Testing landmark positioning
+Confronts 2 pca modes and plots the projections vs the original samples
+
+blue = original component
+red = pca on the x and y dimensions done separately
+yellow = pca done on both x and y simultaneously
+
+---- Similar results, low variance, a lot of information in the mean
 '''
 
 import random
@@ -169,7 +175,8 @@ def pca(X, nb_components=0):
     
     #since computing the covariance matrix takes too much time, we can 
     #approximate it by multiplying X by X transposed, then normalizing it
-    Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
+    #Xcov = np.dot(X, np.transpose(X))/(X.shape[1])
+    Xcov = np.cov(X)
 
     #compute eigenvalues and eigenvectors
     eigenVals, eigenVects = npLA.eig(Xcov)
@@ -297,8 +304,39 @@ if dispPlots == 1:
 #           
 #do PCA  
 # 
+
+#PCA SEPARATELY ON X and Y
 sh_dist = np.zeros(14, dtype = np.double)
 consComps = 3
+    
+xLandmarks = np.zeros((40,teethPerMouth,totalMouths), dtype = np.double)
+yLandmarks = np.zeros((40,teethPerMouth,totalMouths), dtype = np.double)
+xpcaCoeffs = np.zeros((consComps,teethPerMouth,totalMouths), dtype = np.double)
+ypcaCoeffs = np.zeros((consComps,teethPerMouth,totalMouths), dtype = np.double)
+
+xeigVects = np.zeros((40,consComps,teethPerMouth), dtype = np.double)
+yeigVects = np.zeros((40,consComps,teethPerMouth), dtype = np.double)
+xeigVals = np.zeros((consComps,teethPerMouth), dtype = np.double)
+yeigVals = np.zeros((consComps,teethPerMouth), dtype = np.double)
+
+xmus = np.zeros((40,teethPerMouth), dtype = np.double)
+ymus = np.zeros((40,teethPerMouth), dtype = np.double)
+
+xreshapedLandmarks = normalizedLandmarks[:,0,:,:]
+yreshapedLandmarks = normalizedLandmarks[:,1,:,:]
+
+#pca on every tooth separately
+for th in range(teethPerMouth):
+    xeigVals[:,th],xeigVects[:,:,th], xmus[:,th] = pca(xreshapedLandmarks[:,th,:], nb_components = consComps)   
+    yeigVals[:,th],yeigVects[:,:,th], ymus[:,th] = pca(yreshapedLandmarks[:,th,:], nb_components = consComps)   
+      
+for inst in range(totalMouths):
+    for th in range(teethPerMouth):
+        xpcaCoeffs[:,th,inst] = project(xeigVects[:,:,th], xreshapedLandmarks[:,th,inst], xmus[:,th])
+        ypcaCoeffs[:,th,inst] = project(xeigVects[:,:,th], xreshapedLandmarks[:,th,inst], xmus[:,th])
+
+##CLASSIC PCA ON BOTH COMPS SIMULTANEOUSLY
+sh_dist = np.zeros(14, dtype = np.double)
     
 reshapedLandmarks = np.zeros((80,teethPerMouth,totalMouths), dtype = np.double)
 pcaCoeffs = np.zeros((consComps,teethPerMouth,totalMouths), dtype = np.double)
@@ -319,105 +357,18 @@ for inst in range(totalMouths):
     for th in range(teethPerMouth):
         pcaCoeffs[:,th,inst] = project(eigVects[:,:,th], reshapedLandmarks[:,th,inst], mus[:,th])
 
+testTh = 1
+testInst = 2
 
-#choose the testTh tooth of the testInst picture to test if the PCA worked
-#it confronts the original shape with the projected one and saves the euclidean distance beetween them
-#using the cycle we can confront 
-# !!! remember to activate the f_dispProj flag to show the plots
+xsh_reco = reconstruct(xeigVects[:,:,testTh], xpcaCoeffs[:,testTh,testInst], xmus[:,testTh])
+ysh_reco = reconstruct(yeigVects[:,:,testTh], ypcaCoeffs[:,testTh,testInst], ymus[:,testTh])
 
-testTh = 6
-testInst = 6
+sh_reco = reconstruct(eigVects[:,:,testTh], pcaCoeffs[:,testTh,testInst], mus[:,testTh])
+print "xsh_reco shape: ", xsh_reco.shape
 
-sh_proj = project(eigVects[:,:,testTh], reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
-sh_reco = reconstruct(eigVects[:,:,testTh], sh_proj, mus[:,testTh])
-
-sh_dist[consComps-1] = npLA.norm(sh_reco-reshapedLandmarks[:,testTh,testInst])
-
-#print "distance, not interleaved, n of comps: ", consComps, ", ", sh_dist[consComps-1]
-
-
-
-f_dispProj = 0
-if f_dispProj == 1:
-    dispProjection(eigVects[:,:,testTh],reshapedLandmarks[:,testTh,testInst], mus[:,testTh])
-
-print "pca coeffs shape", pcaCoeffs.shape
-print pcaCoeffs
-
-dispCoeffSpace = 0
-if (consComps == 3) & (dispCoeffSpace == 1):
-    fig = plt.figure()
-    ax = fig.add_subplot(111, projection='3d')
-    cmhot = plt.get_cmap("hot")
-    
-    for th in range(teethPerMouth):
-        v = np.full((1, 14), th*2000, dtype = np.double)
-        surf = ax.scatter(pcaCoeffs[0,th,:], pcaCoeffs[1,th,:], pcaCoeffs[2,th,:], zdir='z', s=20, c = v, cmap = cmhot )
-        plt.pause(1)
-    plt.show()
-
-#
-#
-#
-#
-#
-#
-
-shToPlot = np.zeros((40,2), dtype = np.double)
-
-fig, ax = plt.subplots()
-plt.subplots_adjust(left=0.25, bottom=0.25)
-t = np.arange(0.0, 1.0, 0.001)
-Param0 = [0,0,0]
-shInter = reconstruct(eigVects[:,:,testTh],Param0,mus[:,testTh])
-shToPlot[:,0] = shInter[0::2]
-shToPlot[:,1] = shInter[1::2] 
-#s = a0*np.sin(2*np.pi*f0*t)
-l, = plt.plot(shToPlot[:,0], shToPlot[:,1], 'ro')
-plt.axis([-0.3, 0.3, -0.3, 0.3])
-plt.show()
-
-
-axsP1 = plt.axes([0.25, 0.15, 0.65, 0.03])
-axsP2 = plt.axes([0.25, 0.10, 0.65, 0.03])
-axsP3 = plt.axes([0.25, 0.05, 0.65, 0.03])
-
-lLim = -0.04
-uLim = 0.04
-
-sP1 = Slider(axsP1, 'P1', lLim, uLim, valinit=Param0[0])
-sP2 = Slider(axsP2, 'P2', lLim, uLim, valinit=Param0[1])
-sP3 = Slider(axsP3, 'P3', lLim, uLim, valinit=Param0[2])
-
-def update(val):
-    Param = [sP1.val,sP2.val,sP3.val]
-    shInter = reconstruct(eigVects[:,:,testTh],Param,mus[:,testTh])
-    shToPlot[:,0] = shInter[0::2]
-    shToPlot[:,1] = shInter[1::2] 
-    l.set_data(shToPlot[:,0],shToPlot[:,1])
-    fig.canvas.draw_idle()
-sP1.on_changed(update)
-sP2.on_changed(update)
-sP3.on_changed(update)
-
-
-resetax = plt.axes([0.8, 0, 0.1, 0.04])
-button = Button(resetax, 'Reset', hovercolor='0.975')
-
-
-def reset(event):
-    sP1.reset()
-    sP2.reset()
-    sP3.reset()
-button.on_clicked(reset)
-'''
-rax = plt.axes([0.025, 0.5, 0.15, 0.15])
-radio = RadioButtons(rax, ('red', 'blue', 'green'), active=0)
-
-
-def colorfunc(label):
-    l.set_color(label)
-    fig.canvas.draw_idle()
-radio.on_clicked(colorfunc)
-'''
+plt.figure()
+plt.plot(xsh_reco,ysh_reco, 'ro', hold = True)
+plt.plot(sh_reco[0::2],sh_reco[1::2], 'yo', hold = True)
+plt.plot(xreshapedLandmarks[:,testTh,testInst],yreshapedLandmarks[:,testTh,testInst], 'bo', hold = True)
+plt.pause(0.05)
 plt.show()
